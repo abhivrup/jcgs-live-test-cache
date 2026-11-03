@@ -1,0 +1,1514 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="JCGS" />
+    <meta name="theme-color" content="#17181c" />
+    <!-- YouTube's embedded player must identify itself via the HTTP Referer
+         header; a suppressed referer makes every video fail with "Error 153:
+         Video player configuration error". Keep this document's policy at
+         YouTube's recommended value so the player iframe sends its origin. -->
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+<link rel="icon" href="icon-512.png" type="image/png" />
+    <link rel="apple-touch-icon" href="icon-180.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <script>
+      /* Saved-web-app launch fix: the share link opens this player framed
+         inside a Muse wrapper page. If that wrapper is what got saved to
+         the Home Screen, launching the icon would show the Muse page with
+         the player trapped in a frame. When running as a standalone web app
+         (Home Screen icon) but still framed, promote the player to the top
+         window so the icon opens the player itself, full-screen. Normal
+         framed viewing (e.g. inside the Muse app) is left untouched. */
+      (function () {
+        try {
+          var standalone = window.navigator.standalone === true ||
+            (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+          if (!standalone) return;
+          if (window.top === window.self) {
+            try { sessionStorage.removeItem("jcgs-standalone-promote"); } catch (e) {}
+            return;
+          }
+          var done = false;
+          try { done = sessionStorage.getItem("jcgs-standalone-promote") === "1"; } catch (e) {}
+          if (done) return;
+          try { sessionStorage.setItem("jcgs-standalone-promote", "1"); } catch (e) {}
+          window.top.location.replace(window.location.href);
+        } catch (e) { /* stay framed rather than break the page */ }
+      })();
+    </script>
+    <script>
+      /* Invisible app-open counter: one fire-and-forget ping per load.
+               Production opens (github.io) count as "app"; anything else
+                        counts as "test". No UI, no logging, silent on any failure.
+                                 The "v" value below must match APP_VERSION (defined in the
+                                          body script, shown in the header) — bump both together. */
+      (function(){try{var s=/(^|\.)github\.io$/.test(location.hostname)?'app':'test';var i=new Image();i.src='https://script.google.com/macros/s/AKfycbxaacsEj3Akm3wA_ZLul07Mm3PSpvUTEWjIySQdvN9JiAtrq-l79sU8l6-y1SRItGDo/exec?s='+s+'&v=v1.12-cacheTEST&t='+Date.now();}catch(e){}})();
+    </script>
+    <title>JCGS YouTube App</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        overflow: hidden;
+        position: fixed;
+        inset: 0;
+        background: radial-gradient(120% 90% at 50% 0%, #2a2b31 0%, #17181c 55%, #0c0c0f 100%);
+        font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+      .stage {
+        height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px 0;
+      }
+      /* ------------------------------ iPod body ------------------------------
+         Outer proportions follow the iPod Classic (6th gen): body ≈
+         61.8 × 103.5 mm (aspect ≈ 0.597). Inside, the layout trades the
+         Classic's proportions for readability: the LCD spans nearly the
+         full inner width and runs ~40% taller than the old 4:3 screen
+         (near-square), and the click wheel shrinks ~30% to make room —
+         so all 7 menu items fit at once at larger text, and video gets
+         the bigger display too. */
+      .ipod {
+        container-type: inline-size;
+        width: min(96vw, calc(97dvh * 0.597), 440px);
+        aspect-ratio: 0.597;
+        border-radius: 8cqw;
+        background: linear-gradient(160deg, #fdfdfe 0%, #f0f0f3 45%, #d9dbe0 100%);
+        box-shadow: 0 30px 60px rgba(0,0,0,0.55), 0 4px 14px rgba(0,0,0,0.4),
+          inset 0 1px 1px rgba(255,255,255,0.9), inset 0 -3px 8px rgba(0,0,0,0.10);
+        padding: 3.2cqw 2.4cqw 3cqw;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      /* ------------------------------ screen ------------------------------ */
+      .bezel {
+        width: 100%;
+        border-radius: 2cqw;
+        background: #0a0a0c;
+        padding: 1.2cqw;
+        box-shadow: inset 0 1px 3px rgba(255,255,255,0.25), 0 1px 2px rgba(0,0,0,0.25);
+      }
+      .lcd {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 20 / 19;
+        border-radius: 1cqw;
+        overflow: hidden;
+        background: linear-gradient(180deg, #eef2e6 0%, #e3ead9 55%, #d9e2cd 100%);
+        color: #191d17;
+        box-shadow: inset 0 0 12px rgba(60,80,40,0.18);
+      }
+      .player-host { position: absolute; inset: 0; background: #000; }
+      .player-host iframe { width: 100%; height: 100%; display: block; }
+      .screen-layer { position: absolute; inset: 0; display: flex; flex-direction: column; }
+      .lcd-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 3.8cqw;
+        height: 10%;
+        min-height: 7.4cqw;
+        border-bottom: 1px solid rgba(70,90,55,0.35);
+        background: linear-gradient(180deg, rgba(255,255,255,0.5), rgba(255,255,255,0.05));
+        flex: none;
+      }
+      .lcd-header .ttl {
+        font-weight: 700; font-size: 5.1cqw; letter-spacing: 0.01em;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .lcd-header .icons { display: flex; align-items: center; gap: 2cqw; flex: none; }
+      .lcd-header .icons svg { width: 7.4cqw !important; height: 3.3cqw !important; }
+      #playingIcon { font-size: 3.9cqw !important; }
+      .app-version {
+                font-size: 4cqw; font-weight: 700; letter-spacing: 0.02em;
+                color: #3c4636; line-height: 1; white-space: nowrap;
+      }
+      .live-dot {
+        display: inline-block; width: 2.2cqw; height: 2.2cqw; border-radius: 50%;
+        background: #c62f24; box-shadow: 0 0 0 0.5cqw rgba(198,47,36,0.25);
+      }
+      .rows { flex: 1; overflow: hidden; position: relative; }
+      .row {
+        display: flex; align-items: center; gap: 1.8cqw;
+        padding: 0 3.8cqw;
+        font-weight: 600; font-size: 5cqw; line-height: 1.2;
+        cursor: pointer; color: #191d17;
+      }
+      .row.active {
+        color: #fff;
+        background: linear-gradient(180deg, #4b93e6 0%, #2b6fd0 55%, #1d5cb8 100%);
+        text-shadow: 0 1px 1px rgba(0,0,0,0.35);
+      }
+      .row .lbl { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .row .right { font-size: 4.1cqw; opacity: 0.75; font-weight: 500; }
+      .row .chev { font-size: 5.3cqw; }
+      .menu-note { padding: 3cqw 3.8cqw 0; font-size: 3.8cqw; line-height: 1.35; color: #4c5546; }
+      /* ------------------------------ now playing overlay ------------------------------ */
+      .np-overlay {
+        position: absolute; left: 0; right: 0; bottom: 0; z-index: 10;
+        pointer-events: none;
+        padding: 5.8cqw 3.5cqw 2.6cqw;
+        background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.72) 45%, rgba(0,0,0,0.88) 100%);
+        color: #f4f6f0;
+      }
+      .np-title { font-weight: 600; font-size: 4.5cqw; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; }
+      .np-sub { font-size: 3.7cqw; opacity: 0.75; margin: 0.5cqw 0 0; }
+      .np-live {
+        display: inline-block; font-weight: 700; letter-spacing: 0.08em;
+        background: #c62f24; color: #fff; border-radius: 0.9cqw;
+        padding: 0.35cqw 1.6cqw; margin-right: 1.8cqw;
+      }
+      .np-progress { display: flex; align-items: center; gap: 2.3cqw; margin-top: 1.9cqw; font-size: 3.5cqw; }
+      .np-bar { flex: 1; height: 1.7cqw; border-radius: 999px; background: rgba(255,255,255,0.3); overflow: hidden; }
+      .np-bar > div { height: 100%; border-radius: 999px; background: #fff; width: 0%; }
+      /* ------------------------------ click wheel ------------------------------ */
+      .wheel-wrap { flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
+      .wheel {
+        position: relative; touch-action: none; border-radius: 50%;
+        width: 50cqw; height: 50cqw;
+        background: radial-gradient(circle at 50% 42%, #f4f5f7 0%, #e2e4e8 58%, #cfd2d8 100%);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.18), inset 0 1px 1px rgba(255,255,255,0.9), inset 0 -2px 5px rgba(0,0,0,0.08);
+        user-select: none; -webkit-user-select: none;
+      }
+      .wheel .wl {
+        position: absolute; pointer-events: none; user-select: none;
+        font-weight: 600; letter-spacing: 0.1em; color: #5a5e64; font-size: 3.8cqw;
+      }
+      .wheel .wg { position: absolute; pointer-events: none; color: #5a5e64; }
+      /* Glyphs scale down with the smaller wheel (the ~0.7 factor), rather
+         than staying at their old absolute size. !important overrides the
+         inline svg sizes in the markup and in the play/pause glyph swap. */
+      .wheel .wg svg { width: 5.1cqw !important; height: 3.3cqw !important; }
+      .wheel #playGlyph svg { width: 5.7cqw !important; height: 3.1cqw !important; }
+      .wheel button.zone {
+        position: absolute; background: transparent; border: none; cursor: pointer; padding: 0;
+      }
+      .center-btn {
+        position: absolute; width: 38%; height: 38%; left: 31%; top: 31%;
+        border-radius: 50%; cursor: pointer;
+        background: radial-gradient(circle at 50% 40%, #fafbfc 0%, #eceef1 60%, #dde0e5 100%);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.22), inset 0 1px 1px rgba(255,255,255,0.95), inset 0 -2px 4px rgba(0,0,0,0.07);
+        display: flex; align-items: center; justify-content: center;
+      }
+      .center-btn .cb-lbl {
+        pointer-events: none; user-select: none;
+        font-weight: 600; letter-spacing: 0.06em; color: #5a5e64; font-size: 3.3cqw;
+      }
+      /* ------------------------------ Diwali theme (v1.11) ------------------------------ */
+      body.diwali { background: radial-gradient(120% 90% at 50% 0%, #57101f 0%, #420a17 55%, #2a060f 100%); }
+      body.diwali .ipod { background: linear-gradient(160deg, #7a1f33 0%, #5e1020 48%, #420a17 100%); }
+      body.diwali .bezel { background: #2a060f; }
+      body.diwali .lcd { background: linear-gradient(180deg, #fdf6e3 0%, #f7ead0 55%, #efdcae 100%); color: #420a17; }
+      body.diwali .lcd-header { background: linear-gradient(180deg, rgba(233,199,102,0.65), rgba(233,199,102,0.10)); }
+      body.diwali .row.active { background: linear-gradient(180deg, #eec96a 0%, #d9ad33 55%, #bd8f14 100%); color: #420a17; }
+      body.diwali .menu-note { color: #7a5a1e; }
+      body.diwali .wheel { background: radial-gradient(circle at 50% 42%, #f3d98b 0%, #dcb84f 58%, #c6982c 100%); }
+      body.diwali .wheel .wg { color: #5e4306; }
+      body.diwali .center-btn { background: radial-gradient(circle at 50% 40%, #f8e7ae 0%, #e9c766 60%, #cfa12f 100%); }
+      body.diwali .center-btn .cb-lbl { color: #5e4306; }
+      body.diwali2 .wheel .wl { color: #5e4306; }
+      /* ------------------------------ Diwali 2 theme (v1.12) ------------------------------ */
+      body.diwali2 { background: radial-gradient(120% 90% at 50% 0%, #57101f 0%, #420a17 55%, #2a060f 100%); }
+      body.diwali2 .ipod { position: relative; background: linear-gradient(165deg, #8a2438 0%, #5e1020 45%, #420a17 100%); box-shadow: 0 30px 60px rgba(0,0,0,0.55), 0 4px 14px rgba(0,0,0,0.4), inset 0 0 0 0.55cqw #c6982c, inset 0 2px 2px rgba(255,215,130,0.5), inset 0 -3px 8px rgba(0,0,0,0.35); }
+      body.diwali2 .ipod::before { content: "🪔 🪔 🪔 🪔 🪔"; position: absolute; top: 0.2cqw; left: 0; right: 0; text-align: center; font-size: 4.4cqw; line-height: 1; letter-spacing: 2.6cqw; pointer-events: none; z-index: 4; }
+      body.diwali2 .ipod::after { content: "🪔🪔🪔🪔🪔🪔🪔🪔🪔"; position: absolute; left: -0.2cqw; top: 9cqw; width: 4.4cqw; word-break: break-all; font-size: 4.4cqw; line-height: 2; pointer-events: none; z-index: 4; }
+      body.diwali2 .bezel { position: relative; background: #1c040c; box-shadow: inset 0 0 0 0.45cqw #c6982c, inset 0 1px 3px rgba(255,215,130,0.35); }
+      body.diwali2 .bezel::before { content: "🪔🪔🪔🪔🪔🪔🪔🪔🪔"; position: absolute; right: -0.2cqw; top: 5.8cqw; width: 4.4cqw; word-break: break-all; font-size: 4.4cqw; line-height: 2; pointer-events: none; z-index: 4; }
+      body.diwali2 .lcd { background: linear-gradient(180deg, #4a0d1e 0%, #380818 55%, #2a060f 100%); color: #f3d98b; box-shadow: inset 0 0 14px rgba(198,152,44,0.25); }
+      body.diwali2 .lcd-header { background: linear-gradient(180deg, #f3d98b 0%, #dcb84f 55%, #c6982c 100%); color: #420a17; border-bottom: 1px solid #8a2438; }
+      body.diwali2 .app-version { color: #420a17; }
+      body.diwali2 .row { color: #f3d98b; box-shadow: inset 0 -1px 0 rgba(198,152,44,0.18); }
+      body.diwali2 .row.active { background: linear-gradient(180deg, #f3d98b 0%, #dcb84f 55%, #c6982c 100%); color: #420a17; text-shadow: none; }
+      body.diwali2 .menu-note { color: #dcb84f; }
+      body.diwali2 .wheel-wrap { position: relative; }
+      body.diwali2 .wheel-wrap::before { content: ""; position: absolute; left: 50%; top: 50%; width: 60cqw; height: 60cqw; transform: translate(-50%, -50%); border-radius: 50%; background: repeating-conic-gradient(from -5deg, rgba(233,199,102,0.55) 0deg 5deg, rgba(233,199,102,0) 5deg 12deg); -webkit-mask: radial-gradient(circle, transparent 25.5cqw, #000 26.5cqw, #000 29.5cqw, transparent 30cqw); mask: radial-gradient(circle, transparent 25.5cqw, #000 26.5cqw, #000 29.5cqw, transparent 30cqw); pointer-events: none; }
+      body.diwali2 .wheel-wrap::after { content: ""; position: absolute; left: 50%; top: 50%; width: 55cqw; height: 55cqw; transform: translate(-50%, -50%); border-radius: 50%; border: 0.65cqw dotted #dcb84f; opacity: 0.85; pointer-events: none; }
+      body.diwali2 .wheel { background: radial-gradient(circle at 50% 42%, #f8e7ae 0%, #dcb84f 55%, #b8860b 100%); box-shadow: 0 2px 5px rgba(0,0,0,0.4), inset 0 1px 2px rgba(255,246,200,0.9), inset 0 -3px 7px rgba(90,60,0,0.45), 0 0 0 0.6cqw #8a6a10; }
+      body.diwali2 .wheel .wl { color: #5e4306; }
+      body.diwali2 .wheel .wg { color: #5e4306; }
+      body.diwali2 .center-btn { background: radial-gradient(circle at 50% 40%, #fdf3c4 0%, #eec96a 60%, #c6982c 100%); box-shadow: 0 1px 3px rgba(0,0,0,0.35), inset 0 1px 1px rgba(255,250,220,0.95), inset 0 -2px 4px rgba(90,60,0,0.35); }
+      body.diwali2 .center-btn .cb-lbl { color: #5e4306; }      
+      .hidden { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <div class="ipod" id="ipod">
+        <div class="bezel">
+          <div class="lcd" id="lcd">
+            <div class="player-host hidden" id="playerHost"></div>
+
+            <div class="screen-layer" id="listScreen">
+              <div class="lcd-header">
+                <span class="ttl" id="lcdTitle">JCGS YouTube App</span>
+                <span class="icons">
+                  <span id="playingIcon" class="hidden" style="font-size:3.4cqw" aria-label="Playing">▶</span>
+                  <span id="appVersion" class="app-version" aria-label="App version"></span>
+                </span>
+              </div>
+              <div class="rows" id="rows"></div>
+              <p class="menu-note" id="menuNote">Jain Center of Greater Sacramento — live darshan, aarti, pravachan &amp; bhakti from the Sacramento derasar.</p>
+            </div>
+
+            <div class="np-overlay hidden" id="npOverlay">
+              <p class="np-title" id="npTitle">Nothing Playing</p>
+              <p class="np-sub" id="npSub">Pick Videos from the menu</p>
+              <div class="np-progress hidden" id="npProgress">
+                <span id="npCur">0:00</span>
+                <div class="np-bar"><div id="npFill"></div></div>
+                <span id="npRem">-0:00</span>
+                <span id="npState" style="font-size:3.4cqw">▶</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="wheel-wrap">
+          <div class="wheel" id="wheel" role="group" aria-label="Click wheel">
+            <span class="wl" style="top:6.5%;left:50%;transform:translateX(-50%)">MENU/↩</span>
+            <span class="wg" style="left:7%;top:50%;transform:translateY(-50%)">
+              <svg viewBox="0 0 28 18" fill="currentColor" aria-hidden="true" style="width:7.2cqw;height:4.6cqw"><path d="M3 2h3v14H3zM26 2v14L13 9zM14 2v14L3.5 9z"/></svg>
+            </span>
+            <span class="wg" style="right:7%;top:50%;transform:translateY(-50%)">
+              <svg viewBox="0 0 28 18" fill="currentColor" aria-hidden="true" style="width:7.2cqw;height:4.6cqw"><path d="M22 2h3v14h-3zM2 2v14l11-7zM13 2v14l11-7z"/></svg>
+            </span>
+            <span class="wg" id="playGlyph" style="bottom:6%;left:50%;transform:translateX(-50%)">
+              <svg viewBox="0 0 30 16" fill="currentColor" aria-hidden="true" style="width:8cqw;height:4.4cqw"><path d="M4 1l9 7-9 7z"/><path d="M17 1h3.4v14H17zM23 1h3.4v14H23z"/></svg>
+            </span>
+            <button type="button" class="zone" aria-label="Menu" id="zoneMenu" style="top:1%;left:31%;width:38%;height:25%"></button>
+            <button type="button" class="zone" aria-label="Previous" id="zonePrev" style="left:1%;top:31%;width:25%;height:38%"></button>
+            <button type="button" class="zone" aria-label="Next" id="zoneNext" style="right:1%;top:31%;width:25%;height:38%"></button>
+            <button type="button" class="zone" aria-label="Play or pause" id="zonePlay" style="bottom:1%;left:31%;width:38%;height:25%"></button>
+            <div class="center-btn" id="centerBtn" role="button" aria-label="Select" tabindex="0"><span class="cb-lbl">SELECT</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    "use strict";
+    /* ============================ channel ============================ */
+    var APP_VERSION = "v1.12-cacheTEST";
+      var CHANNEL_ID = "UC1C7YIULB-Rj-9A1l62ajrA";
+    var UPLOADS_PLAYLIST = "UU1C7YIULB-Rj-9A1l62ajrA"; /* channel uploads = UU + channel id minus UC */
+    var STREAMS_PLAYLIST = "UULV1C7YIULB-Rj-9A1l62ajrA"; /* "Live streams" — the channel's stream recordings */
+    var SHORTS_PLAYLIST = "UUSH1C7YIULB-Rj-9A1l62ajrA"; /* "Short videos" — the channel's shorts */
+    var URL_LIVE = "https://m.youtube.com/@JCGSLive/live/";
+    var URL_HOME = "https://m.youtube.com/@JCGSLive";
+    var URL_STREAMS = "https://m.youtube.com/@JCGSLive/streams";
+    var URL_PLAYLISTS = "https://m.youtube.com/@JCGSLive/playlists";
+    var CHANNEL_NAME = "Jain Center of Greater Sacramento";
+
+    function $(id) { return document.getElementById(id); }
+    function fmtTime(sec) {
+      if (!isFinite(sec) || sec < 0) sec = 0;
+      var m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+      return m + ":" + (s < 10 ? "0" : "") + s;
+    }
+    /* External links: from the Home Screen app (standalone), window.open
+       spawns an in-app browser sheet — and when the link hands off to the
+       YouTube app, that sheet is left behind blank, to be dismissed by
+       hand on return. A plain navigation is handed to the system instead
+       and leaves no sheet behind; the app stays on its own screen. In a
+       normal browser tab, keep the new-tab behavior. */
+    function openExternal(url) {
+      var standalone = (window.navigator && window.navigator.standalone) ||
+        (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+      if (standalone) { window.location.href = url; return; }
+      window.open(url, "_blank");
+    }
+
+    /* ============================ click sound ============================ */
+    var audioCtx = null;
+    function click() {
+      try {
+        if (!audioCtx) {
+          var AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return;
+          audioCtx = new AC();
+        }
+        if (audioCtx.state === "suspended") audioCtx.resume();
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = "square";
+        osc.frequency.value = 2100;
+        gain.gain.setValueAtTime(0.025, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.018);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.02);
+      } catch (e) { /* garnish only */ }
+    }
+
+    /* ============================ navigation ============================ */
+    var stack = [{ kind: "menu" }];
+    var selections = {};
+    function screen() { return stack[stack.length - 1]; }
+    function getSel() { return selections[screen().kind] || 0; }
+    function setSel(i) { selections[screen().kind] = i; render(); }
+    function push(s) { stack.push(s); render(); }
+    function pop() { if (stack.length > 1) stack.pop(); render(); }
+    function gotoNowPlaying() { if (screen().kind !== "nowPlaying") push({ kind: "nowPlaying" }); }
+
+    /* ============================ playback ============================ */
+    var mode = null;            /* "live" | "videos" | "shorts" | "streams" | "playlist" */
+    var activePlaylistId = null, activePlaylistTitle = "";
+    var isPlaying = false, volume = 80;
+    var progress = { t: 0, d: 0 };
+    var videoTitle = "";
+    var player = null, apiReady = false, pendingMode = null;
+    var liveFallbackDone = false; /* true once a failed live embed has fallen back to YouTube */
+
+    window.onYouTubeIframeAPIReady = function () {
+      apiReady = true;
+      if (pendingMode) { var m = pendingMode; pendingMode = null; startMode(m); }
+      if (eventsLoadPending) { eventsLoadPending = false; startHarvest(); }
+      if (videosLoadPending) { videosLoadPending = false; startVideoHarvest(); }
+    };
+    (function loadApi() {
+      if (window.YT && window.YT.Player) { apiReady = true; return; }
+      var tag = document.createElement("script");
+      tag.src = "https://www.youtube.com/iframe_api";
+      tag.async = true;
+      document.head.appendChild(tag);
+    })();
+
+    /* ==================== Live Darshan (embedded) ====================
+       The "Live Darshan / Live Event" item plays the channel's live stream
+       embedded in Now Playing. Entering Live first asks the channel
+       owner's resolver endpoint (LIVE_RESOLVER_URL, an Apps Script
+       web app) for the channel's current live video ID — resolved
+       fresh on every entry, never cached in the app — and plays
+       that ID through the standard video embed (see makeYtIframe),
+       with the same player setup as every other source. The ID is
+       what the channel's /live page
+       (https://m.youtube.com/@JCGSLive/live/, trailing slash
+       included, exactly as the user specified) currently points at,
+       so a past recording is never presented as the live darshan.
+       If the resolver answers null, fails to load, or does not
+       answer within ~8 seconds, Live falls back to its previous
+       source unchanged: the live_stream embed for the channel,
+       which YouTube resolves to whatever is currently live on the
+       channel at load time. Entering Live always rebuilds the
+       player (see sourceKey), so a stale source can never keep
+       playing in its place.
+       If the embed reports a player error (e.g. nothing is live, or
+       the stream refuses embedding), the item falls back to opening
+       the /live page on YouTube — URL_LIVE, trailing slash included
+       (see liveEmbedFailed).
+       Leaving Live is a full teardown, not just a screen change:
+       backing out of the live Now Playing screen (MENU) or picking
+       any other section stops and destroys the main player (see
+       teardownLivePlayback), so the next section always builds a
+       completely clean player and nothing live-related lingers.
+       Next/Previous are no-ops for Live (see stepTrack). */
+    /* Bumped on every live entry and folded into live mode's source
+       key (see sourceKey), so entering Live Darshan always rebuilds
+       the player on the live embed and no previously loaded
+       source can continue in its place — not even when re-entering
+       Live. */
+    /* TEST BUILD A (cached live ID, local file only — NOT deployed,
+       NOT production, NOT the fs-test fullscreen build): see the
+       cache helpers below resolveLiveId. */
+    var liveSeq = 0;
+    /* The channel owner's live resolver (Apps Script web app): given
+       the JSONP callback name __jcgsLiveResolve, it answers with the
+       channel's current live video ID, e.g. {"live":"A4SqCamMaF4"},
+       or {"live":null} when nothing is live. Distinct from the
+       app-open counter endpoint in the page head — do not merge. */
+    var LIVE_RESOLVER_URL = "https://script.google.com/macros/s/AKfycbyMEejxokxsxorDwLw9tYYrgZSQKXazcK43D2Tw_VpnE9zU6c8VnngUiG0rqFeATYDG/exec";
+    /* Video ID resolved for the current live entry, or null when the
+       resolver gave no ID (live mode then uses the live_stream embed,
+       exactly as before). Set fresh by resolveLiveId on every entry;
+       never carried across entries. */
+    var liveResolvedId = null;
+    function startLive() {
+      /* TEST BUILD A: a fresh cached ID opens the player at once;
+         a background refresh keeps the cache current without ever
+         swapping a playing player. Without a cache, behavior is
+         unchanged: resolve fresh, then enter live mode. */
+      cancelLiveWork();
+      liveSeq++;
+      liveFallbackDone = false;
+      liveResolvedId = null;
+      liveUsedCache = false;
+      liveCacheRetried = false;
+      var cached = getCachedLiveId();
+      if (cached) {
+        liveResolvedId = cached;
+        liveUsedCache = true;
+        startMode("live");
+        refreshLiveIdCache();
+        return;
+      }
+      resolveLiveId(liveSeq);
+    }
+    /* Ask the resolver for the channel's current live video ID via a
+       JSONP-style script tag (Apps Script answers a page this way).
+       Whichever way the lookup ends — an ID, null, a failed load, or
+       no answer within ~8 seconds — live mode is entered exactly
+       once: with the resolved ID when there is one, otherwise with
+       the previous live_stream behavior, unchanged. A late answer
+       for an entry the user has already superseded or navigated
+       away from is ignored. */
+    function resolveLiveId(seq) {
+      var done = false;
+      var timer = null;
+      var tag = null;
+      function finish(id) {
+        if (done) return;
+        done = true;
+        if (timer) { clearTimeout(timer); timer = null; }
+        if (tag && tag.parentNode) tag.parentNode.removeChild(tag);
+        if (seq !== liveSeq) return;         /* entry superseded */
+        if (screen().kind !== "menu") return; /* user navigated away */
+        liveResolvedId = id || null;
+        if (id) setCachedLiveId(id);
+        startMode("live");
+      }
+      window.__jcgsLiveResolve = function (data) {
+        finish(data && data.live ? String(data.live) : null);
+      };
+      tag = document.createElement("script");
+      tag.src = LIVE_RESOLVER_URL + "?cb=__jcgsLiveResolve&t=" + Date.now();
+      tag.onerror = function () { finish(null); };
+      document.head.appendChild(tag);
+      timer = setTimeout(function () { finish(null); }, 8000);
+    }
+
+    /* TEST BUILD A only: device-side cache for the resolved live ID.
+       The resolver takes ~3s (Apps Script redirect + startup), and
+       startLive() waits for it before the player screen appears.
+       A cached ID (5-minute TTL) lets the player open at once;
+       a background refresh keeps the cache fresh without ever
+       touching a playing player. Only positive IDs are cached;
+       null answers are never cached. localStorage access is
+       guarded so private mode can never break Live. */
+    var LIVE_ID_CACHE_KEY = "jcgs.liveId.v1";
+    var LIVE_ID_CACHE_TTL = 300000; /* 5 minutes */
+    var liveUsedCache = false;      /* this entry opened from cache */
+    var liveCacheRetried = false;   /* fresh re-resolve already tried */
+    function getCachedLiveId() {
+      try {
+        var raw = window.localStorage.getItem(LIVE_ID_CACHE_KEY);
+        if (!raw) return null;
+        var c = JSON.parse(raw);
+        if (!c || !c.id || !c.ts) return null;
+        if (Date.now() - c.ts > LIVE_ID_CACHE_TTL) return null;
+        return String(c.id);
+      } catch (e) { return null; }
+    }
+    function setCachedLiveId(id) {
+      try {
+        if (!id) return;
+        window.localStorage.setItem(LIVE_ID_CACHE_KEY, JSON.stringify({ id: String(id), ts: Date.now() }));
+      } catch (e) { /* cache is optional garnish */ }
+    }
+    /* Resolve in the background and cache the answer. Never touches
+       the player, the mode, or liveResolvedId. Uses its own JSONP
+       callback so it can never clobber an entry's in-flight resolve. */
+    function refreshLiveIdCache() {
+      var done = false;
+      var timer = null;
+      var tag = null;
+      function finishCache(data) {
+        if (done) return;
+        done = true;
+        if (timer) { clearTimeout(timer); timer = null; }
+        if (tag && tag.parentNode) tag.parentNode.removeChild(tag);
+        if (data && data.live) setCachedLiveId(String(data.live));
+      }
+      window.__jcgsLiveRefresh = function (data) { finishCache(data); };
+      tag = document.createElement("script");
+      tag.src = LIVE_RESOLVER_URL + "?cb=__jcgsLiveRefresh&t=" + Date.now();
+      tag.onerror = function () { finishCache(null); };
+      document.head.appendChild(tag);
+      timer = setTimeout(function () { finishCache(null); }, 8000);
+    }
+    /* One prefetch at app open, so the ID is often ready before the
+       first Live Darshan tap. Skipped when the cache is still fresh. */
+    function prefetchLiveId() {
+      if (getCachedLiveId()) return;
+      refreshLiveIdCache();
+    }
+    /* Rebuild the live player with a fresh ID after a cached ID
+       failed (e.g. the stream ended). Only used by the live error
+       path, at most once per entry. */
+    function rebuildLiveWithId(id) {
+      liveResolvedId = id;
+      liveUsedCache = false;
+      liveSeq++;
+      if (mode === "live" && screen().kind === "nowPlaying") mountPlayer("live");
+    }
+    function livePlayError() {
+      /* Cached ID failed on its first error: try one fresh resolve
+         before falling back to opening YouTube externally. */
+      if (liveUsedCache && !liveCacheRetried) {
+        liveCacheRetried = true;
+        var done = false;
+        var timer = null;
+        var tag = null;
+        function finishRetry(data) {
+          if (done) return;
+          done = true;
+          if (timer) { clearTimeout(timer); timer = null; }
+          if (tag && tag.parentNode) tag.parentNode.removeChild(tag);
+          var id = data && data.live ? String(data.live) : null;
+          if (id) { setCachedLiveId(id); rebuildLiveWithId(id); }
+          else liveEmbedFailed();
+        }
+        window.__jcgsLiveRetry = function (data) { finishRetry(data); };
+        tag = document.createElement("script");
+        tag.src = LIVE_RESOLVER_URL + "?cb=__jcgsLiveRetry&t=" + Date.now();
+        tag.onerror = function () { finishRetry(null); };
+        document.head.appendChild(tag);
+        timer = setTimeout(function () { finishRetry(null); }, 8000);
+        return;
+      }
+      liveEmbedFailed();
+    }
+    /* The embedded live player refused the stream (e.g. embedding
+       disabled for it): leave Now Playing and open the live page on
+       YouTube instead. Runs at most once per live attempt. */
+    function liveEmbedFailed() {
+      if (mode !== "live" || liveFallbackDone) return;
+      liveFallbackDone = true;
+      if (screen().kind === "nowPlaying") pop();
+      openExternal(URL_LIVE);
+    }
+
+    /* Clear any offscreen harvest player left over from an earlier
+       flow, so nothing offscreen lingers when sections change.
+       (Live Darshan itself no longer uses the harvest machinery —
+       it loads its live embed directly; the harvest player
+       now serves only the JCGS Events list below.) Called whenever
+       the user moves on — picking a section (see startMode),
+       opening a browse list, entering Live, or backing out of the
+       live Now Playing screen (see teardownLivePlayback). */
+    function cancelLiveWork() {
+      destroyHarvest();
+      destroyVideoHarvest();
+    }
+
+    var loadIndex = 0; /* playlist start index for the next loadSource (picked stream) */
+    function startMode(m, startIndex) {
+      /* Picking any other section clears any stray offscreen
+         harvest player; switching away from a playing live stream
+         likewise leaves nothing behind — mountPlayer below destroys
+         the live main player itself because the source key differs. */
+      if (m !== "live") cancelLiveWork();
+      mode = m;
+      loadIndex = startIndex || 0;
+      isPlaying = true;
+      progress = { t: 0, d: 0 };
+      videoTitle = m === "live" ? "Live Darshan" : (m === "streams" ? "JCGS Events" : (m === "shorts" ? "Reels" : (m === "playlist" ? (activePlaylistTitle || "Playlist") : (m === "favorites" ? "Favorites" : "JCGS Videos"))));
+      mountPlayer(m);
+      gotoNowPlaying();
+    }
+    function loadSource(target, m) {
+      if (m === "live") {
+        /* Nothing to load: the live player's iframe src IS the live
+           embed (see makeYtIframe) — the resolved current live
+           video's standard embed, or the live_stream embed when
+           the resolver gave no ID. */
+      }
+      else {
+        if (m === "streams") target.loadPlaylist({ listType: "playlist", list: STREAMS_PLAYLIST, index: loadIndex });
+        else if (m === "shorts") target.loadPlaylist({ listType: "playlist", list: SHORTS_PLAYLIST, index: 0 });
+        else if (m === "playlist") target.loadPlaylist({ listType: "playlist", list: activePlaylistId, index: 0 });
+        else if (m === "favorites") target.loadPlaylist(favorites.map(function (f) { return f.id; }), loadIndex);
+        else target.loadPlaylist({ listType: "playlist", list: UPLOADS_PLAYLIST, index: loadIndex });
+        try { target.setLoop(m === "favorites"); } catch (e) { /* player not ready */ }
+      }
+    }
+    /* Make sure the embed iframe itself permits fullscreen, so the YouTube
+       player's own fullscreen button works — on iOS the video goes
+       fullscreen natively from inside the iframe, which needs this. */
+    function prepPlayerIframe() {
+      try {
+        var f = player && player.getIframe ? player.getIframe() : null;
+        if (!f) return;
+        f.setAttribute("allowfullscreen", "");
+        f.setAttribute("allow", "autoplay; encrypted-media; fullscreen; picture-in-picture");
+        f.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+      } catch (e) { /* garnish only */ }
+    }
+    /* Build the YouTube player iframe ourselves instead of letting the
+       IFrame API create it, so the embed request is guaranteed to carry a
+       proper HTTP Referer. YouTube blocks playback with "Error 153: Video
+       player configuration error" when the referer is missing — which is
+       what happens when this app runs framed inside another app whose
+       referrer policy suppresses it. The element-level referrerpolicy
+       attribute overrides the surrounding policy for this iframe, and the
+       origin parameter identifies the embedding page to the player. The
+       API attaches to a pre-built iframe whose src has enablejsapi=1. */
+    function makeYtIframe(m) {
+      var f = document.createElement("iframe");
+      var q = "enablejsapi=1&playsinline=1&rel=0&modestbranding=1";
+      try {
+        if (/^https?:$/.test(window.location.protocol) && window.location.origin) {
+          q += "&origin=" + encodeURIComponent(window.location.origin);
+        }
+      } catch (e) { /* origin is optional identity garnish */ }
+      if (m === "live") {
+        /* Live Darshan's source: the channel's current live video.
+           When the resolver supplied its ID (see resolveLiveId),
+           use the standard video embed of that ID; otherwise fall
+           back to the live_stream embed, which resolves to whatever
+           is currently live on the channel at load time. Same
+           self-built iframe discipline as every other player:
+           referrerpolicy + origin, same parameters either way. */
+        if (liveResolvedId) {
+          f.src = "https://www.youtube.com/embed/" + liveResolvedId + "?autoplay=1&" + q;
+        } else {
+          f.src = "https://www.youtube.com/embed/live_stream?channel=" + CHANNEL_ID + "&autoplay=1&" + q;
+        }
+      } else {
+        f.src = "https://www.youtube.com/embed?" + q;
+      }
+      f.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+      f.setAttribute("allow", "autoplay; encrypted-media; fullscreen; picture-in-picture");
+      f.setAttribute("allowfullscreen", "");
+      f.style.width = "100%"; f.style.height = "100%"; f.style.border = "0"; f.style.display = "block";
+      return f;
+    }
+    /* Identity of the source the current player instance was loaded
+       with. The player is reused only for that exact source; picking a
+       different one rebuilds it (see mountPlayer). */
+    var loadedKey = null;
+    function sourceKey(m) {
+      /* Live's key carries the per-entry sequence (liveSeq), so it can
+         never equal the key of the player instance already on screen.
+         Entering Live therefore always takes the teardown-and-rebuild
+         path in mountPlayer below, and the fresh player's first and
+         only source is the live embed (the resolved live video, or
+         the live_stream fallback) — a previous playlist
+         queue sharing the old player can't leak through. */
+      if (m === "live") return "live#" + liveSeq;
+      if (m === "streams") return "streams:" + loadIndex;
+      if (m === "playlist") return "playlist:" + (activePlaylistId || "");
+      if (m === "favorites") return "favorites:" + favVersion + ":" + loadIndex;
+      return m;
+    }
+    /* Stop and destroy the main player completely and empty its
+       host, so the next player built is the only YouTube player on
+       the page. */
+    function destroyMainPlayer() {
+      if (player) {
+        try { player.stopVideo(); } catch (e) {}
+        try { player.destroy(); } catch (e) {}
+        player = null;
+      }
+      loadedKey = null;
+      var hostEl = $("playerHost");
+      if (hostEl) hostEl.innerHTML = "";
+    }
+    /* Leaving Live Darshan via MENU: tear down ALL live playback
+       state — main player and any offscreen harvest player — and
+       reset the mode, so whatever section is picked next builds
+       a completely clean player and nothing from the live session
+       can leak into it. Other modes keep the iPod behavior of
+       playing on behind the menu; live gets the full teardown so a
+       live stream never keeps running behind the menu. */
+    function teardownLivePlayback() {
+      cancelLiveWork();
+      destroyMainPlayer();
+      mode = null;
+      isPlaying = false;
+      progress = { t: 0, d: 0 };
+    }
+    function mountPlayer(m) {
+      if (!apiReady || !window.YT || !window.YT.Player) { pendingMode = m; return; }
+      var key = sourceKey(m);
+      if (player && loadedKey === key) {
+        /* Same source re-selected — reload it in place. */
+        try {
+          loadSource(player, m);
+          return;
+        } catch (e) { /* fall through and rebuild */ }
+      }
+      if (player) {
+        /* A different source was picked — e.g. another playlist after
+           going back to the Playlists list. Swapping the queue in
+           place via loadPlaylist on the already-playing shared player
+           is not reliable: the player can keep playing the previous
+           playlist's videos (the stale-playlist bug this fixes — not
+           browser caching). Destroy the player and build a fresh one
+           whose first and only load is the new source, so the old
+           queue is gone for good. */
+        destroyMainPlayer();
+      }
+      var host = $("playerHost");
+      host.innerHTML = "";
+      var frame = makeYtIframe(m);
+      host.appendChild(frame);
+      var opts = {
+        events: {
+          onReady: function (e) {
+            e.target.setVolume(volume);
+            prepPlayerIframe();
+            loadSource(e.target, m);
+          },
+          onStateChange: function (e) {
+            if (e.data === 1) { isPlaying = true; syncPlayingUi(); }
+            if (e.data === 2) { isPlaying = false; syncPlayingUi(); }
+            if (e.data === 0) { isPlaying = false; syncPlayingUi(); }
+            refreshVideoMeta();
+          },
+          onError: function () {
+            /* Only the live embed has a designed fallback; other modes
+               keep the player's own error screen. */
+            if (mode === "live") livePlayError();
+          }
+        }
+      };
+      player = new window.YT.Player(frame, opts);
+      loadedKey = key;
+      prepPlayerIframe();
+    }
+    function refreshVideoMeta() {
+      if (!player) return;
+      try {
+        var data = player.getVideoData ? player.getVideoData() : null;
+        if (data && data.title) videoTitle = data.title;
+      } catch (e) { /* not ready */ }
+    }
+    function stepTrack(dir) {
+      if (!player || (mode !== "videos" && mode !== "shorts" && mode !== "streams" && mode !== "playlist" && mode !== "favorites")) return;
+      try {
+        var pl = player.getPlaylist ? player.getPlaylist() : null, len = pl ? pl.length : 0, idx = player.getPlaylistIndex ? player.getPlaylistIndex() : -1; if (len && idx >= 0) player.playVideoAt((idx + dir + len) % len); else if (dir > 0) player.nextVideo(); else player.previousVideo();
+        progress = { t: 0, d: 0 };
+        isPlaying = true;
+        setTimeout(refreshVideoMeta, 600);
+        renderNowPlaying(); syncPlayingUi();
+      } catch (e) { /* transient */ }
+    }
+    function togglePlay() {
+      if (!player || !mode) return;
+      try {
+        if (player.getPlayerState() === 1) { player.pauseVideo(); isPlaying = false; }
+        else { player.playVideo(); isPlaying = true; }
+        syncPlayingUi();
+      } catch (e) { /* transient */ }
+    }
+
+    /* ==================== JCGS Events browse list ====================
+       Like YouTube's Live tab: a scrollable list of the channel's stream
+       recordings (newest first, in "Live streams" playlist order) that the
+       user browses with the wheel and plays with SELECT. Video IDs come
+       from cueing the playlist in a throwaway offscreen player and reading
+       getPlaylist() — the visible player is never touched. Titles come
+       from YouTube's public oEmbed endpoint (no key): the newest 5 load
+       first so the list opens with real titles, the rest stream in in
+       background batches of 15 and ahead of the highlight as it scrolls.
+       Titles and IDs are cached for the session. If anything in that
+       chain fails, the list gives up and falls back to the previous
+       behavior: autoplay the streams playlist from the start. */
+    var streamIds = null;        /* null until harvested */
+    var streamTitles = {};       /* video id -> title */
+    var titleRequested = {};     /* video id -> fetch started */
+    var titlesFrontier = 0;      /* first index whose title is unrequested */
+    var eventsLoadPending = false;
+    var bgTitlesStarted = false;
+    var harvestPlayer = null, harvestTimer = null, harvestTries = 0, harvestHost = null;
+    var videoIds = null;         /* null until harvested */
+    var videoTitles = {};        /* video id -> title */
+    var videoTitleRequested = {}; /* video id -> fetch started */
+    var videoTitlesFrontier = 0; /* first index whose title is unrequested */
+    var videosLoadPending = false;
+    var videoBgTitlesStarted = false;
+    var videoHarvestPlayer = null, videoHarvestTimer = null, videoHarvestTries = 0, videoHarvestHost = null;
+
+    function openEventsList() {
+      /* Clear any stray offscreen harvest player before starting
+         a fresh Events harvest. */
+      cancelLiveWork();
+      push({ kind: "events" });
+      if (streamIds) { kickTitleLoads(); return; }
+      /* Shortcut: the streams playlist is already loaded in the player. */
+      if (player && mode === "streams") {
+        try {
+          var ids = player.getPlaylist ? player.getPlaylist() : null;
+          if (ids && ids.length) { finishStreamIds(ids); return; }
+        } catch (e) { /* fall through to the harvest player */ }
+      }
+      if (!apiReady || !window.YT || !window.YT.Player) { eventsLoadPending = true; return; }
+      startHarvest();
+    }
+    function startHarvest() {
+      if (harvestPlayer) return;
+      var div = document.createElement("div");
+      div.style.cssText = "position:absolute;left:-9999px;top:0;width:8px;height:8px;overflow:hidden";
+      document.body.appendChild(div);
+      harvestHost = div;
+      var hFrame = makeYtIframe();
+      div.appendChild(hFrame);
+      try {
+        harvestPlayer = new window.YT.Player(hFrame, {
+          events: {
+            onReady: function (e) {
+              try { e.target.cuePlaylist({ listType: "playlist", list: STREAMS_PLAYLIST }); } catch (err) {}
+            }
+          }
+        });
+      } catch (e) { failHarvest(); return; }
+      harvestTries = 0;
+      harvestTimer = setInterval(pollHarvest, 300);
+    }
+    function pollHarvest() {
+      harvestTries++;
+      var ids = null;
+      try { ids = harvestPlayer && harvestPlayer.getPlaylist ? harvestPlayer.getPlaylist() : null; } catch (e) {}
+      if (ids && ids.length) { finishStreamIds(ids); return; }
+      if (harvestTries > 30) failHarvest(); /* ~9s with no list — give up */
+    }
+    function destroyHarvest() {
+      if (harvestTimer) { clearInterval(harvestTimer); harvestTimer = null; }
+      if (harvestPlayer) {
+        /* Destroy through the API first, while its iframe is still
+           attached; yanking the iframe out of the DOM beforehand
+           leaves the API's own teardown working on a detached node.
+           The manual removal afterwards is only a backstop, and the
+           offscreen wrapper div goes too — no empty shells pile up
+           on the page across harvests. */
+        try { harvestPlayer.destroy(); } catch (e) {}
+        try { var f = harvestPlayer.getIframe(); if (f && f.parentNode) f.parentNode.removeChild(f); } catch (e) {}
+        harvestPlayer = null;
+      }
+      if (harvestHost) {
+        if (harvestHost.parentNode) harvestHost.parentNode.removeChild(harvestHost);
+        harvestHost = null;
+      }
+    }
+    function finishStreamIds(ids) {
+      streamIds = ids.slice();
+      if (screen().kind === "events") render();
+      kickTitleLoads();
+      destroyHarvest();
+    }
+    function failHarvest() {
+      cancelLiveWork();
+      if (screen().kind === "events") { pop(); startMode("streams"); }
+    }
+    function fetchTitles(from, count) {
+      if (!streamIds || typeof fetch !== "function") return [];
+      var jobs = [];
+      var end = Math.min(streamIds.length, from + count);
+      titlesFrontier = Math.max(titlesFrontier, end);
+      for (var i = from; i < end; i++) {
+        (function (id) {
+          if (titleRequested[id]) return;
+          titleRequested[id] = true;
+          var job = fetch("https://www.youtube.com/oembed?url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + id) + "&format=json")
+            .then(function (r) { if (!r.ok) throw new Error("oembed " + r.status); return r.json(); })
+            .then(function (j) {
+              if (j && j.title) streamTitles[id] = j.title;
+              if (screen().kind === "events") render();
+              return !!streamTitles[id];
+            })
+            .catch(function () { return false; });
+          jobs.push(job);
+        })(streamIds[i]);
+      }
+      return jobs;
+    }
+    function kickTitleLoads() {
+      /* Newest 5 first — the list opens fast with real titles. If none of
+         them resolve, title lookup is broken: fall back to autoplay. */
+      var first = fetchTitles(0, 5);
+      if (first.length) {
+        Promise.all(first).then(function (results) {
+          var ok = results.some(function (r) { return r; });
+          if (!ok && screen().kind === "events") { pop(); startMode("streams"); }
+        });
+      } else if (streamIds && !streamIds.slice(0, 5).some(function (id) { return streamTitles[id]; })) {
+        /* Nothing in flight and nothing loaded at the top of the list —
+           title lookup is unavailable; fall back to autoplay. */
+        if (screen().kind === "events") { pop(); startMode("streams"); }
+      }
+      if (!bgTitlesStarted) {
+        bgTitlesStarted = true;
+        var next = 5;
+        (function bgStep() {
+          if (!streamIds || next >= streamIds.length) return;
+          fetchTitles(next, 15);
+          next += 15;
+          setTimeout(bgStep, 900);
+        })();
+      }
+    }
+    function ensureTitlesNear(sel) {
+      if (streamIds && sel + 8 >= titlesFrontier && titlesFrontier < streamIds.length) {
+        fetchTitles(titlesFrontier, 15); if (streamIds && sel + 8 >= streamIds.length) { var wf = titlesFrontier; fetchTitles(Math.max(0, sel - 7), 15); titlesFrontier = wf; }
+      }
+    }
+    function playStreamAt(i) {
+      if (!streamIds || !streamIds[i]) { startMode("streams"); return; }
+      startMode("streams", i);
+      var t = streamTitles[streamIds[i]];
+      if (t) { videoTitle = t; renderNowPlaying(); }
+    }
+
+    /* ==================== Videos browse list ====================
+       The Videos menu item opens this list, mirroring JCGS Events:
+       the channel's uploads are harvested offscreen, titles load in
+       the background, and only titled videos get a row. Picking a
+       row loads the uploads playlist at that video's index, so the
+       wheel still steps through the uploads in order. If the
+       harvest or the title chain fails, the list gives up and falls
+       back to autoplay the uploads playlist from the start. */
+    function openVideosList() {
+      /* Clear any stray offscreen harvest players before starting
+         a fresh Videos harvest. */
+      cancelLiveWork();
+      push({ kind: "videosList" });
+      if (videoIds) { kickVideoTitleLoads(); return; }
+      /* Shortcut: the uploads playlist is already loaded in the player. */
+      if (player && mode === "videos") {
+        try {
+          var ids = player.getPlaylist ? player.getPlaylist() : null;
+          if (ids && ids.length) { finishVideoIds(ids); return; }
+        } catch (e) { /* fall through to the harvest player */ }
+      }
+      if (!apiReady || !window.YT || !window.YT.Player) { videosLoadPending = true; return; }
+      startVideoHarvest();
+    }
+    function startVideoHarvest() {
+      if (videoHarvestPlayer) return;
+      var div = document.createElement("div");
+      div.style.cssText = "position:absolute;left:-9999px;top:0;width:8px;height:8px;overflow:hidden";
+      document.body.appendChild(div);
+      videoHarvestHost = div;
+      var hFrame = makeYtIframe();
+      div.appendChild(hFrame);
+      try {
+        videoHarvestPlayer = new window.YT.Player(hFrame, {
+          events: {
+            onReady: function (e) {
+              try { e.target.cuePlaylist({ listType: "playlist", list: UPLOADS_PLAYLIST }); } catch (err) {}
+            }
+          }
+        });
+      } catch (e) { failVideoHarvest(); return; }
+      videoHarvestTries = 0;
+      videoHarvestTimer = setInterval(pollVideoHarvest, 300);
+    }
+    function pollVideoHarvest() {
+      videoHarvestTries++;
+      var ids = null;
+      try { ids = videoHarvestPlayer && videoHarvestPlayer.getPlaylist ? videoHarvestPlayer.getPlaylist() : null; } catch (e) {}
+      if (ids && ids.length) { finishVideoIds(ids); return; }
+      if (videoHarvestTries > 30) failVideoHarvest(); /* ~9s with no list — give up */
+    }
+    function destroyVideoHarvest() {
+      if (videoHarvestTimer) { clearInterval(videoHarvestTimer); videoHarvestTimer = null; }
+      if (videoHarvestPlayer) {
+        try { videoHarvestPlayer.destroy(); } catch (e) {}
+        try { var f = videoHarvestPlayer.getIframe(); if (f && f.parentNode) f.parentNode.removeChild(f); } catch (e) {}
+        videoHarvestPlayer = null;
+      }
+      if (videoHarvestHost) {
+        if (videoHarvestHost.parentNode) videoHarvestHost.parentNode.removeChild(videoHarvestHost);
+        videoHarvestHost = null;
+      }
+    }
+    function finishVideoIds(ids) {
+      videoIds = ids.slice();
+      if (screen().kind === "videosList") render();
+      kickVideoTitleLoads();
+      destroyVideoHarvest();
+    }
+    function failVideoHarvest() {
+      cancelLiveWork();
+      if (screen().kind === "videosList") { pop(); startMode("videos"); }
+    }
+    function fetchVideoTitles(from, count) {
+      if (!videoIds || typeof fetch !== "function") return [];
+      var jobs = [];
+      var end = Math.min(videoIds.length, from + count);
+      videoTitlesFrontier = Math.max(videoTitlesFrontier, end);
+      for (var i = from; i < end; i++) {
+        (function (id) {
+          if (videoTitleRequested[id]) return;
+          videoTitleRequested[id] = true;
+          var job = fetch("https://www.youtube.com/oembed?url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + id) + "&format=json")
+            .then(function (r) { if (!r.ok) throw new Error("oembed " + r.status); return r.json(); })
+            .then(function (j) {
+              if (j && j.title) videoTitles[id] = j.title;
+              if (screen().kind === "videosList") render();
+              return !!videoTitles[id];
+            })
+            .catch(function () { return false; });
+          jobs.push(job);
+        })(videoIds[i]);
+      }
+      return jobs;
+    }
+    function kickVideoTitleLoads() {
+      /* Newest 5 first — the list opens fast with real titles. If none of
+         them resolve, title lookup is broken: fall back to autoplay. */
+      var first = fetchVideoTitles(0, 5);
+      if (first.length) {
+        Promise.all(first).then(function (results) {
+          var ok = results.some(function (r) { return r; });
+          if (!ok && screen().kind === "videosList") { pop(); startMode("videos"); }
+        });
+      } else if (videoIds && !videoIds.slice(0, 5).some(function (id) { return videoTitles[id]; })) {
+        /* Nothing in flight and nothing loaded at the top of the list —
+           title lookup is unavailable; fall back to autoplay. */
+        if (screen().kind === "videosList") { pop(); startMode("videos"); }
+      }
+      if (!videoBgTitlesStarted) {
+        videoBgTitlesStarted = true;
+        var next = 5;
+        (function bgStep() {
+          if (!videoIds || next >= videoIds.length) return;
+          fetchVideoTitles(next, 15);
+          next += 15;
+          setTimeout(bgStep, 900);
+        })();
+      }
+    }
+    function ensureVideoTitlesNear(sel) {
+      if (videoIds && sel + 8 >= videoTitlesFrontier && videoTitlesFrontier < videoIds.length) {
+        fetchVideoTitles(videoTitlesFrontier, 15); if (videoIds && sel + 8 >= videoIds.length) { var wf = videoTitlesFrontier; fetchVideoTitles(Math.max(0, sel - 7), 15); videoTitlesFrontier = wf; }
+      }
+    }
+    function playVideoAt(i) {
+      if (!videoIds || !videoIds[i]) { startMode("videos"); return; }
+      startMode("videos", i);
+      var t = videoTitles[videoIds[i]];
+      if (t) { videoTitle = t; renderNowPlaying(); }
+    }
+
+    /* ==================== Playlists browse list ====================
+       Same experience as JCGS Events, one level up: a scrollable in-app
+       list of the channel's playlists (titles, in Playlists-tab order)
+       that the user browses with the wheel; SELECT plays the picked
+       playlist's videos embedded in Now Playing, with next/previous
+       stepping through that playlist. The channel's curated playlists
+       can't be derived from the channel ID, and YouTube blocks the
+       runtime browse fetch from the app's web address, so the list is
+       baked into the app: the channel's playlists as of October 2026,
+       extracted and verified from the channel's own Playlists tab.
+       It loads instantly with no network dependency and is refreshed
+       in periodic (roughly monthly) app updates. If the baked list
+       were somehow empty, the item falls back to its previous
+       behavior: opening the Playlists page on YouTube externally, so
+       it never dead-ends. */
+    var channelPlaylists = [
+      { id: "PLYb5TMSmvFHg", title: "JCGS 3rd Anniversary Celebration 2026" },
+      { id: "PLWZBXosB1IeM", title: "JCGS Reels" },
+      { id: "PLHiad36Eo0cc", title: "JCGS Paryushan Mahaparva 2026" },
+      { id: "PL5t7q6tYTze7TS5nNutk4dAdc6cRvQRGz", title: "JCGS Events & Visits 2026" },
+      { id: "PL5t7q6tYTze79T6_Euh9s4svV8J8HQ4Ze", title: "JCGS 2nd Anniversary 2025" },
+      { id: "PL5t7q6tYTze7CfoP01DB1CdgfLufZ_AvK", title: "JCGS Diwali 2025" },
+      { id: "PL5t7q6tYTze7SACkuV9SDP6cWRQlAj0xp", title: "JCGS 1st Anniversary 2024" },
+      { id: "PL5t7q6tYTze6tZ3Fn3bSpEBLKhbP0EcFs", title: "NY Jain Sangh Visit" },
+      { id: "PL5t7q6tYTze7deDbWSCAV1Ml1InjCXGKQ", title: "Live Darshan" },
+      { id: "PL5t7q6tYTze4sC9xQhwYtpqHSKqAVjupZ", title: "Paryushan Mahaparva 2024" },
+      { id: "PL5t7q6tYTze7QvT4CrYN6nmJ7s3Kfgpw4", title: "Guruji Narendrabhai Koradia Visit 2024" },
+      { id: "PL5t7q6tYTze4zmoyaFcfu-xFVRH_-RZCq", title: "Mahavir Janma Kalyanak 2024" },
+      { id: "PL5t7q6tYTze57sqBXgSv3JffDSb428gXE", title: "Visitors" },
+      { id: "PL5t7q6tYTze4_NF-qzXkKiCz93z48EPHG", title: "Cha Gau Yatra 2024" },
+      { id: "PL5t7q6tYTze6BawXow52SJ_8N4zram4zX", title: "Srimad Rajchandraji Pratishtha Mohotsav 2024" },
+      { id: "PL5t7q6tYTze6Zyz6KBaU8K8vyVK92KCzo", title: "Grand Pratishtha Mahotsav 2023" }
+    ];
+
+    function openPlaylistsList() {
+      if (!channelPlaylists.length) { openExternal(URL_PLAYLISTS); return; }
+      /* Same stray-harvest cleanup as openEventsList. */
+      cancelLiveWork();
+      push({ kind: "playlists" });
+    }
+    function playPlaylist(pl) {
+      activePlaylistId = pl.id;
+      activePlaylistTitle = pl.title;
+      startMode("playlist");
+    }
+
+    setInterval(function () {
+      if (screen().kind !== "nowPlaying" || !player) return;
+      try {
+        progress = { t: player.getCurrentTime() || 0, d: player.getDuration() || 0 };
+        refreshVideoMeta();
+        renderNowPlaying();
+      } catch (e) { /* not ready */ }
+    }, 500);
+
+    /* ==================== personal: favorites + theme ====================
+    Everything personal lives only in this phone's local storage —
+    it is never sent anywhere (the app-open counter still reports
+    just the app version). Favorites are individual videos saved
+    from the Events or Videos lists, or from Now Playing, by
+    holding SELECT; Settings holds the app theme (v1.11). */
+    var LS_FAVS = "jcgs.favorites.v1", LS_THEME = "jcgs.theme.v1";
+    function lsGet(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } }
+    function lsSet(k, v) { try { if (v === null) window.localStorage.removeItem(k); else window.localStorage.setItem(k, v); } catch (e) {} }
+    var appTheme = (lsGet(LS_THEME) === "diwali" || lsGet(LS_THEME) === "diwali2") ? lsGet(LS_THEME) : "classic";
+    function applyTheme() { document.body.classList.toggle("diwali", appTheme === "diwali"); document.body.classList.toggle("diwali2", appTheme === "diwali2"); }
+    function setTheme(t) { appTheme = t; lsSet(LS_THEME, t); applyTheme(); render(); }
+    applyTheme();
+    var favorites = [];
+    try {
+      var fj = JSON.parse(lsGet(LS_FAVS) || "[]");
+      if (Array.isArray(fj)) favorites = fj.filter(function (f) { return f && f.id && f.title; });
+    } catch (e) { favorites = []; }
+    var favVersion = 0; /* folded into favorites' source key: any change rebuilds the player */
+    function saveFavorites() { lsSet(LS_FAVS, JSON.stringify(favorites)); favVersion++; }
+    function isFavorite(id) { return !!id && favorites.some(function (f) { return f.id === id; }); }
+    function toggleFavorite(id, title) {
+      if (!id) return;
+      var i = -1;
+      favorites.forEach(function (f, j) { if (f.id === id) i = j; });
+      if (i >= 0) favorites.splice(i, 1);
+      else favorites.unshift({ id: id, title: title || "Video" });
+      saveFavorites();
+    }
+    function currentVideoId() {
+      try {
+        var d = player && player.getVideoData ? player.getVideoData() : null;
+        return d && d.video_id ? d.video_id : null;
+      } catch (e) { return null; }
+    }
+    function openFavoritesList() { cancelLiveWork(); push({ kind: "favorites" }); }
+    function playFavoriteAt(i) {
+      if (!favorites[i]) return;
+      startMode("favorites", i);
+      videoTitle = favorites[i].title;
+      renderNowPlaying();
+    }
+    function openSettings() { push({ kind: "settings" }); }
+    /* ============================ menu model ============================ */
+    function buildItems() {
+      if (screen().kind === "playlists") {
+        if (!channelPlaylists.length) return [{ label: "No playlists", action: function () {} }];
+        return channelPlaylists.map(function (pl) {
+          return {
+            label: pl.title,
+            chevron: true,
+            action: function () { playPlaylist(pl); }
+          };
+        });
+      }
+      if (screen().kind === "videosList") {
+        if (!videoIds) return [{ label: "Loading videos…", action: function () {} }];
+        var vItems = [];
+        videoIds.forEach(function (id, i) {
+          /* Only videos whose titles have already loaded get a row —
+             same rule as JCGS Events: no blank or placeholder rows,
+             and every row keeps its own index in the full uploads
+             list, so it always plays its own video. */
+          if (!videoTitles[id]) return;
+          vItems.push({
+            label: videoTitles[id],
+            right: isFavorite(id) ? "★" : undefined,
+            favId: id, favTitle: videoTitles[id],
+            action: function () { playVideoAt(i); }
+          });
+        });
+        return vItems;
+      }
+      if (screen().kind === "events") {
+        if (!streamIds) return [{ label: "Loading events…", action: function () {} }];
+var items = [];
+        streamIds.forEach(function (id, i) {
+          /* Only events whose titles have already loaded get a row.
+             Events still loading in the background are not rendered
+             at all — no blank or placeholder rows — and appear in
+             the list, in the same newest-first order, as their
+             titles arrive (see fetchTitles). The action keeps the
+             event's own index in the full streamIds list, so every
+             visible row still plays its own event. */
+    if (!streamTitles[id]) return;
+          items.push({
+            label: streamTitles[id],
+            right: isFavorite(id) ? "★" : undefined,
+            favId: id, favTitle: streamTitles[id],
+            action: function () { playStreamAt(i); }
+          });
+        });
+        return items;
+      }
+      if (screen().kind === "favorites") {
+        if (!favorites.length) return [
+          { label: "No favorites yet", action: function () {} },
+          { label: "Hold SELECT on a video to add it", action: function () {} }
+        ];
+        return favorites.map(function (f, i) {
+          return {
+            label: f.title,
+            right: "★",
+            favId: f.id, favTitle: f.title,
+            action: function () { playFavoriteAt(i); }
+          };
+        });
+      }
+      if (screen().kind === "settings") {
+  return [
+    { label: "Classic Theme", right: appTheme === "classic" ? "✓" : "", action: function () { setTheme("classic"); } },
+    { label: "Diwali Theme", right: appTheme === "diwali" ? "✓" : "", action: function () { setTheme("diwali"); } },
+    { label: "Diwali 2 Theme", right: appTheme === "diwali2" ? "✓" : "", action: function () { setTheme("diwali2"); } }
+  ];
+      }
+      if (screen().kind !== "menu") return null;
+      return [
+        { label: "Live Darshan / Live Event", chevron: true, action: function () { startLive(); } },
+        { label: "JCGS Events", chevron: true, action: function () { openEventsList(); } },
+        { label: "Reels", chevron: true, action: function () { startMode("shorts"); } },
+        { label: "Playlists", chevron: true, action: function () { openPlaylistsList(); } },
+        { label: "Videos", chevron: true, action: function () { openVideosList(); } },
+        { label: "Favorites", chevron: true, action: function () { openFavoritesList(); } },
+        { label: "YouTube Channel", right: "Open", action: function () { openExternal(URL_HOME); } },
+        { label: "Now Playing", chevron: true, action: function () { push({ kind: "nowPlaying" }); } },
+        { label: "Settings", chevron: true, action: function () { openSettings(); } }
+      ];
+    }
+
+    /* ============================ rendering ============================ */
+    var VISIBLE_ROWS = 7;
+    var currentItems = null;
+
+    function render() {
+      var s = screen();
+      var isNP = s.kind === "nowPlaying";
+      $("playerHost").classList.toggle("hidden", !isNP);
+      $("listScreen").classList.toggle("hidden", isNP);
+      $("npOverlay").classList.toggle("hidden", !isNP);
+      syncPlayingUi();
+      if (isNP) { renderNowPlaying(); return; }
+      $("lcdTitle").textContent = s.kind === "events" ? "JCGS Events" : (s.kind === "videosList" ? "Videos" : (s.kind === "playlists" ? "Playlists" : (s.kind === "favorites" ? "Favorites" : (s.kind === "settings" ? "Settings" : "JCGS YouTube App"))));
+      $("menuNote").classList.toggle("hidden", s.kind !== "menu");
+      if (s.kind === "menu") {
+  $("menuNote").textContent = "Jain Center of Greater Sacramento — live darshan, aarti, pravachan & bhakti from the Sacramento derasar.";
+}
+      currentItems = buildItems();
+      var rowsEl = $("rows");
+      rowsEl.innerHTML = "";
+      var sel = Math.min(getSel(), currentItems.length - 1);
+      /* Window the rows so the highlight stays on screen in long lists
+         (the events list); the 7-item menu always fits whole. */
+      var winStart = s.winStart || 0;
+      if (sel < winStart) winStart = sel;
+      if (sel > winStart + VISIBLE_ROWS - 1) winStart = sel - VISIBLE_ROWS + 1;
+      winStart = Math.max(0, Math.min(winStart, Math.max(0, currentItems.length - VISIBLE_ROWS)));
+      s.winStart = winStart;
+      currentItems.slice(winStart, winStart + VISIBLE_ROWS).forEach(function (item, vi) {
+        var idx = winStart + vi;
+        var row = document.createElement("div");
+        row.className = "row" + (idx === sel ? " active" : "");
+        row.style.height = (100 / VISIBLE_ROWS) + "%";
+        row.setAttribute("role", "button");
+        row.setAttribute("aria-label", item.label);
+        var lbl = document.createElement("span"); lbl.className = "lbl"; lbl.textContent = item.label;
+        row.appendChild(lbl);
+        if (item.right) {
+          var r = document.createElement("span"); r.className = "right"; r.textContent = item.right;
+          row.appendChild(r);
+        }
+        if (item.chevron) { var c = document.createElement("span"); c.className = "chev"; c.textContent = "›"; row.appendChild(c); }
+        row.addEventListener("click", function () { selections[screen().kind] = idx; click(); item.action(); });
+        rowsEl.appendChild(row);
+      });
+    }
+
+    function renderNowPlaying() {
+      var isLive = mode === "live";
+      var hasSource = !!mode;
+      $("npTitle").textContent = hasSource ? videoTitle : "Nothing Playing";
+      var sub = $("npSub");
+      if (!hasSource) {
+        sub.textContent = "Pick Videos from the menu";
+      } else if (isLive) {
+        sub.innerHTML = "";
+        var badge = document.createElement("span"); badge.className = "np-live"; badge.textContent = "LIVE";
+        sub.appendChild(badge);
+        sub.appendChild(document.createTextNode(CHANNEL_NAME));
+      } else {
+        var pos = "";
+        try {
+          if (player && player.getPlaylistIndex) {
+            var idx = player.getPlaylistIndex();
+            var list = player.getPlaylist ? player.getPlaylist() : null;
+            if (idx >= 0 && list && list.length) pos = " · Video " + (idx + 1) + " of " + list.length;
+          }
+        } catch (e) { /* not ready */ }
+        sub.textContent = CHANNEL_NAME + pos + " · Vol " + volume + "%" + (isFavorite(currentVideoId())? " · ★ Favorite": "");
+      }
+      $("npProgress").classList.toggle("hidden", !hasSource);
+      if (hasSource) {
+        if (isLive) {
+          $("npCur").textContent = "LIVE";
+          $("npRem").textContent = "";
+          $("npFill").style.width = "100%";
+        } else {
+          $("npCur").textContent = fmtTime(progress.t);
+          $("npRem").textContent = "-" + fmtTime(Math.max(0, progress.d - progress.t));
+          $("npFill").style.width = (progress.d > 0 ? Math.min(100, progress.t / progress.d * 100) : 0) + "%";
+        }
+        $("npState").textContent = isPlaying ? "❚❚" : "▶";
+      }
+    }
+    function syncPlayingUi() {
+      $("playingIcon").classList.toggle("hidden", !isPlaying);
+      $("playGlyph").innerHTML = isPlaying
+        ? '<svg viewBox="0 0 30 16" fill="currentColor" aria-hidden="true" style="width:8cqw;height:4.4cqw"><path d="M9 1h5v14H9zM18 1h5v14h-5z"/></svg>'
+        : '<svg viewBox="0 0 30 16" fill="currentColor" aria-hidden="true" style="width:8cqw;height:4.4cqw"><path d="M4 1l9 7-9 7z"/><path d="M17 1h3.4v14H17zM23 1h3.4v14H23z"/></svg>';
+      if (screen().kind === "nowPlaying") renderNowPlaying();
+    }
+
+    /* ============================ wheel ============================ */
+    var SCROLL_STEP_DEG = 22;
+    var wheel = $("wheel");
+    var gesture = null, lastTapAt = 0;
+
+    function angleAt(x, y) {
+      var r = wheel.getBoundingClientRect();
+      return Math.atan2(y - (r.top + r.height / 2), x - (r.left + r.width / 2)) * 180 / Math.PI;
+    }
+    wheel.addEventListener("pointerdown", function (e) {
+      if (gesture) return;
+      if (e.target === $("centerBtn")) return;
+      try { wheel.setPointerCapture(e.pointerId); } catch (err) {}
+      gesture = { id: e.pointerId, last: angleAt(e.clientX, e.clientY), acc: 0, total: 0, x: e.clientX, y: e.clientY };
+    });
+    wheel.addEventListener("pointermove", function (e) {
+      if (!gesture || e.pointerId !== gesture.id) return;
+      var a = angleAt(e.clientX, e.clientY);
+      var d = a - gesture.last;
+      if (d > 180) d -= 360;
+      if (d < -180) d += 360;
+      gesture.last = a; gesture.acc += d; gesture.total += Math.abs(d);
+      while (gesture.acc >= SCROLL_STEP_DEG) { gesture.acc -= SCROLL_STEP_DEG; onScrollStep(1); }
+      while (gesture.acc <= -SCROLL_STEP_DEG) { gesture.acc += SCROLL_STEP_DEG; onScrollStep(-1); }
+    });
+    function endGesture(e) {
+      if (!gesture || e.pointerId !== gesture.id) return;
+      var g = gesture; gesture = null;
+      var moved = Math.hypot(e.clientX - g.x, e.clientY - g.y);
+      if (g.total > 14 || moved > 12) return;
+      var r = wheel.getBoundingClientRect();
+      var dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+      if (Math.hypot(dx, dy) < r.width * 0.19) return;
+      var a = Math.atan2(dy, dx) * 180 / Math.PI;
+      lastTapAt = Date.now();
+      if (a >= -135 && a < -45) onMenuBtn();
+      else if (a >= 45 && a < 135) onPlayPause();
+      else if (a >= 135 || a < -135) onPrev();
+      else onNext();
+    }
+    wheel.addEventListener("pointerup", endGesture);
+    wheel.addEventListener("pointercancel", function () { gesture = null; });
+
+    function zoneClick(action) {
+      return function () { if (Date.now() - lastTapAt < 400) return; action(); };
+    }
+    $("zoneMenu").addEventListener("click", zoneClick(onMenuBtn));
+    $("zonePrev").addEventListener("click", zoneClick(onPrev));
+    $("zoneNext").addEventListener("click", zoneClick(onNext));
+    $("zonePlay").addEventListener("click", zoneClick(onPlayPause));
+    /* SELECT: a short press selects/plays as always. Holding it
+       (~0.6s) toggles the highlighted or playing video in Favorites
+       (v1.9), and the click that follows the hold is swallowed so
+       the video does not also pause or re-trigger. */
+    var centerHoldTimer = null, centerHeld = false;
+    $("centerBtn").addEventListener("pointerdown", function (e) {
+      e.stopPropagation();
+      centerHeld = false;
+      if (centerHoldTimer) clearTimeout(centerHoldTimer);
+      centerHoldTimer = setTimeout(function () { centerHeld = true; onCenterHold(); }, 600);
+    });
+    $("centerBtn").addEventListener("pointerup", function (e) {
+      e.stopPropagation();
+      if (centerHoldTimer) { clearTimeout(centerHoldTimer); centerHoldTimer = null; }
+    });
+    $("centerBtn").addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (centerHeld) { centerHeld = false; return; }
+      onCenter();
+    });
+    function onCenterHold() {
+      click();
+      if (screen().kind === "nowPlaying") {
+        if (mode && mode !== "live") {
+          var id = currentVideoId();
+          if (id) { toggleFavorite(id, videoTitle); renderNowPlaying(); }
+        }
+        return;
+      }
+      var item = currentItems && currentItems[getSel()];
+      if (item && item.favId) { toggleFavorite(item.favId, item.favTitle); render(); }
+    }
+
+    function moveSelection(dir) {
+      if (!currentItems || !currentItems.length) return;
+      setSel(((getSel() + dir) % currentItems.length + currentItems.length) % currentItems.length);
+      if (screen().kind === "events") ensureTitlesNear(getSel());
+      if (screen().kind === "videosList") ensureVideoTitlesNear(getSel());
+    }
+    function onScrollStep(dir) {
+      if (screen().kind === "nowPlaying") {
+        if (mode) {
+          volume = Math.min(100, Math.max(0, volume + dir * 4));
+          if (player) { try { player.setVolume(volume); } catch (e) {} }
+          click(); renderNowPlaying();
+        }
+        return;
+      }
+      click();
+      moveSelection(dir);
+    }
+    function onCenter() {
+      click();
+      if (screen().kind === "nowPlaying") { togglePlay(); return; }
+      var item = currentItems && currentItems[getSel()];
+      if (item) item.action();
+    }
+    function onMenuBtn() {
+      click();
+      /* Backing out of Live Darshan tears all live playback down
+         (see teardownLivePlayback) instead of leaving the live
+         player, its probe/harvest machinery, and its timers running
+         behind the menu — the next section then starts clean. */
+      if (screen().kind === "nowPlaying" && mode === "live") teardownLivePlayback();
+      pop();
+    }
+    /* Next/Previous: on the Now Playing screen they skip tracks; on a
+       menu/list screen (e.g. the home page, where nothing is playing yet)
+       they move the highlight down/up so the buttons always do something
+       visible. */
+    function onPrev() {
+      click();
+      if (screen().kind === "nowPlaying") stepTrack(-1);
+      else moveSelection(-1);
+    }
+    function onNext() {
+      click();
+      if (screen().kind === "nowPlaying") stepTrack(1);
+      else moveSelection(1);
+    }
+    function onPlayPause() { click(); togglePlay(); }
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowDown") { onScrollStep(1); e.preventDefault(); }
+      else if (e.key === "ArrowUp") { onScrollStep(-1); e.preventDefault(); }
+      else if (e.key === "Enter" || e.key === " ") { onCenter(); e.preventDefault(); }
+      else if (e.key === "Escape" || e.key === "Backspace") { onMenuBtn(); e.preventDefault(); }
+    });
+
+    $("appVersion").textContent = APP_VERSION;
+      render();
+    try { prefetchLiveId(); } catch (e) {}
+    </script>
+  </body>
+</html>

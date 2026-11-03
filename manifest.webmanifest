@@ -1,0 +1,25 @@
+{
+ "background_color": "#17181c",
+ "description": "JCGS YouTube App",
+ "display": "standalone",
+ "icons": [
+  {
+   "src": "icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "icon-180.png",
+   "sizes": "180x180",
+   "type": "image/png",
+   "purpose": "any"
+  }
+ ],
+ "name": "JCGS Cache Test",
+ "orientation": "portrait",
+ "scope": ".",
+ "short_name": "JCGS Cache",
+ "start_url": ".",
+ "theme_color": "#17181c"
+}
